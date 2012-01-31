@@ -3,7 +3,7 @@
 
 """
 Call by CMS: http://localhost:8888/activate?url=/path...
-File get from FILESERVER and copied to CDN_DIR
+File get from CMS_SERVER and copied to CDN_DIR
 """
 
 import os
@@ -21,12 +21,12 @@ PORT = 8888
 if len(sys.argv) > 1:
     PORT = int(sys.argv[1])
 
-FILESERVER = 'http://localhost:8081/webapp'
+CMS_SERVER = 'http://localhost:8081/webapp'
 ALLOWED_CHARS = \
     'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890-./'
 
 # run python -m SimpleHTTPServer 8008 to serve files
-CDN_DIR = '/tmp/CDN/'
+CDN_DIR = '/tmp/CDN'
 
 
 def clean_string(chunk):
@@ -39,7 +39,7 @@ def clean_string(chunk):
 
 class Dispatcher(object):
     """
-    Dispatcher command pattern
+    Dispatcher - command pattern
     """
 
     routing = {}
@@ -48,9 +48,9 @@ class Dispatcher(object):
         self._initCmd()
         self._route = route
 
-        # The cms need this triks...
+        # The cms need this tricks...
         self._url = urlparse.parse_qs(query_string).get('url', '')[0]
-        self._file_to_get = "%s%s" % (FILESERVER, urllib.quote(self._url))
+        self._file_to_get = "%s%s" % (CMS_SERVER, urllib.quote(self._url))
         self._file_name = self._file_to_get.split('/')[-1:][0]
         self._file_folder = "%s%s" % (CDN_DIR,
                 '/'.join(clean_string(s) for s in self._url.split('/')[:-1]))
@@ -88,17 +88,17 @@ class Dispatcher(object):
             self._error = True
 
         if not self._error:
-            print 'file file: ', self._file_name
-            print 'file folder: ', self._file_folder
+            print 'File name: ', self._file_name
+            print 'File folder: ', self._file_folder
             try:
                 os.makedirs(self._file_folder)
             except OSError, e:
-                print "Directory already exists, nothing to do"
+                print "Directory already exists, nothing to do."
 
             f = file(self._file_stored, 'w')
             f.write(file_to_store.read())
             f.close()
-            print "File %s downloaded\n" % self._file_to_get
+            print "File %s uploaded.\n" % self._file_to_get
 
         return ("OK", "KO")[self._error]
 
@@ -106,12 +106,15 @@ class Dispatcher(object):
         """
         Delete file from storage
         """
+
+        print "Delete file: ", self._file_stored
+        self._error = True
         if os.path.isfile(self._file_stored):
             try:
                 os.remove(self._file_stored)
+                self._error = False
             except IOError, e:
-                print "Errore! ", e
-                self._error = True
+                print "Error! ", e
 
         return ("OK", "KO")[self._error]
 

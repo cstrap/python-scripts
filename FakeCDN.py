@@ -6,26 +6,31 @@ Call by CMS: http://localhost:8888/activate?url=/path...
 File get from CMS_SERVER and copied to CDN_DIR
 """
 
+import logging
 import os
-import urllib
-import urllib2
-import urlparse
-import threading
 import sys
+import threading
+import urllib
+import urlparse
 
 from BaseHTTPServer import BaseHTTPRequestHandler
 from BaseHTTPServer import HTTPServer
 from SocketServer import ThreadingMixIn
 
-PORT = 8888
-if len(sys.argv) > 1:
-    PORT = int(sys.argv[1])
+try:
+    from local_settings import PORT, CMS_SERVER
+except Exception, e:
+    print "No local settings found."
+    sys.exit(1)
 
-CMS_SERVER = 'http://localhost:8081/webapp'
+
 ALLOWED_CHARS = \
     'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890-./'
 
-# run python -m SimpleHTTPServer 8008 to serve files
+"""
+Serving file with simple http server
+$ mkdir -p /tmp/CDN && cd /tmp/CDN && python -m SimpleHTTPServer 8008
+"""
 CDN_DIR = '/tmp/CDN'
 
 
@@ -35,6 +40,42 @@ def clean_string(chunk):
         if c not in ALLOWED_CHARS:
             result = result.replace(c, '-')
     return result
+
+
+def logger():
+    """
+    Stream log to console
+    """
+
+    logger = logging.getLogger(__name__)
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    logger.setLevel(logging.INFO)
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+    return logger
+
+
+def reporthook(blocks_read, block_size, total_size):
+    """
+    Code from Doug Helman - PyMOTW
+    total_size is reported in bytes
+    block_size is the amount read each time
+    blocks_read is the number of blocks successfully read
+    """
+
+    if not blocks_read:
+        log.info('Connection opened')
+        return
+
+    if total_size < 0:
+        log.info('Read %d blocks (%d bytes)' % \
+            (blocks_read, blocks_read * block_size))
+    else:
+        amount_read = blocks_read * block_size
+        log.info('Read %d blocks, or %d/%d' % \
+            (blocks_read, amount_read, total_size))
 
 
 class Dispatcher(object):
@@ -63,8 +104,7 @@ class Dispatcher(object):
         self.routing['/deactivate'] = self._dectivate
 
     def dispatch(self):
-        print "-------------------------------------------------------------\n"
-        print "Thread name: ", threading.currentThread().getName()
+        log.debug("Thread name: ", threading.currentThread().getName())
         if self._route in self.routing.keys():
             return self.routing[self._route]()
         return "KO"
@@ -74,31 +114,34 @@ class Dispatcher(object):
         Copy file on storage
         """
 
-        print 'File from: ', self._file_to_get
+        log.info('File name: ', self._file_name)
+        log.info('File folder: ', self._file_folder)
         try:
-            file_to_store = urllib2.urlopen(self._file_to_get)
-        except urllib2.URLError, e:
-            print 'Error getting file: %s\n' % e
+            os.makedirs(self._file_folder)
+        except OSError, e:
+            log.warning("Directory already exists, nothing to do.")
+
+        log.info('File from: ', self._file_to_get)
+        try:
+            file_to_store, msg = urllib.urlretrieve(
+                self._file_to_get,
+                self._file_stored,
+                reporthook)
+            log.info('File: %s' % file_to_store)
+            log.info('Headers')
+            log.info('%s' % msg)
+        except urllib.URLError, e:
+            log.error('Error getting file: %s\n' % e)
             self._error = True
         except IOError, e:
-            print 'Error: file not found: %s\n' % e
+            log.error('Error: file not found: %s\n' % e)
             self._error = True
         except Exception, e:
-            print 'Exception %s\n' % e
+            log.error('Exception %s' % e)
             self._error = True
-
-        if not self._error:
-            print 'File name: ', self._file_name
-            print 'File folder: ', self._file_folder
-            try:
-                os.makedirs(self._file_folder)
-            except OSError, e:
-                print "Directory already exists, nothing to do."
-
-            f = file(self._file_stored, 'w')
-            f.write(file_to_store.read())
-            f.close()
-            print "File %s uploaded.\n" % self._file_to_get
+        finally:
+            urllib.urlcleanup()
+            log.info("File %s uploaded.\n" % self._file_to_get)
 
         return ("OK", "KO")[self._error]
 
@@ -107,14 +150,14 @@ class Dispatcher(object):
         Delete file from storage
         """
 
-        print "Delete file: ", self._file_stored
+        log.info("Delete file: ", self._file_stored)
         self._error = True
         if os.path.isfile(self._file_stored):
             try:
                 os.remove(self._file_stored)
                 self._error = False
             except IOError, e:
-                print "Error! ", e
+                log.error("Error! ", e)
 
         return ("OK", "KO")[self._error]
 
@@ -139,6 +182,8 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 if __name__ == "__main__":
 
+    log = logger()
+
     server = ThreadedHTTPServer(('localhost', PORT), GetHandler)
-    print 'Starting server on port %s, use <Ctrl-C> to stop' % PORT
+    log.info('Starting server on port %s, use <Ctrl-C> to stop' % PORT)
     server.serve_forever()

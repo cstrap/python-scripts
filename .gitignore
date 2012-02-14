@@ -1,2 +1,4 @@
 __init__.py
 *.nja
+local_settings.py
+*.pyc

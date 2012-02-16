@@ -9,6 +9,7 @@ File get from CMS_SERVER and copied to CDN_DIR
 import logging
 import os
 import sys
+import shutil
 import threading
 import urllib
 import urlparse
@@ -89,7 +90,7 @@ class Dispatcher(object):
         self._initCmd()
         self._route = route
 
-        # The cms need this tricks...
+        # The cms module needs this ugly tricks...
         self._url = urlparse.parse_qs(query_string).get('url', '')[0]
         self._file_to_get = "%s%s" % (CMS_SERVER, urllib.quote(self._url))
         self._file_name = self._file_to_get.split('/')[-1:][0]
@@ -101,7 +102,8 @@ class Dispatcher(object):
 
     def _initCmd(self):
         self.routing['/activate'] = self._activate
-        self.routing['/deactivate'] = self._dectivate
+        self.routing['/delete'] = self._delete
+        self.routing['/tree'] = self._delete_tree
 
     def dispatch(self):
         log.debug("Thread name: %s" % threading.currentThread().getName())
@@ -145,7 +147,7 @@ class Dispatcher(object):
 
         return ("OK", "KO")[self._error]
 
-    def _dectivate(self):
+    def _delete(self):
         """
         Delete file from storage
         """
@@ -160,6 +162,18 @@ class Dispatcher(object):
                 log.error("Error! %s" % e)
 
         return ("OK", "KO")[self._error]
+
+    def _delete_tree(self):
+        """
+        Delete directory tree
+        """
+
+        log.info("-" * 80)
+        log.info("Delete directory: %s" % self._url)
+        try:
+            shutil.rmtree(CDN_DIR + self._url)
+        except OSError, e:
+            log.error("RmTree %s" % e)
 
 
 class GetHandler(BaseHTTPRequestHandler):

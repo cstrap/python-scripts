@@ -104,7 +104,7 @@ class Dispatcher(object):
         self.routing['/deactivate'] = self._dectivate
 
     def dispatch(self):
-        log.debug("Thread name: ", threading.currentThread().getName())
+        log.debug("Thread name: %s" % threading.currentThread().getName())
         if self._route in self.routing.keys():
             return self.routing[self._route]()
         return "KO"
@@ -114,14 +114,14 @@ class Dispatcher(object):
         Copy file on storage
         """
 
-        log.info('File name: ', self._file_name)
-        log.info('File folder: ', self._file_folder)
+        log.info('File name: %s' % self._file_name)
+        log.info('File folder: %s' % self._file_folder)
         try:
             os.makedirs(self._file_folder)
         except OSError, e:
             log.warning("Directory already exists, nothing to do.")
 
-        log.info('File from: ', self._file_to_get)
+        log.info('File from: %s' % self._file_to_get)
         try:
             file_to_store, msg = urllib.urlretrieve(
                 self._file_to_get,
@@ -150,14 +150,14 @@ class Dispatcher(object):
         Delete file from storage
         """
 
-        log.info("Delete file: ", self._file_stored)
+        log.info("Delete file: %s" % self._file_stored)
         self._error = True
         if os.path.isfile(self._file_stored):
             try:
                 os.remove(self._file_stored)
                 self._error = False
             except IOError, e:
-                log.error("Error! ", e)
+                log.error("Error! %s" % e)
 
         return ("OK", "KO")[self._error]
 
